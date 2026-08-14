@@ -269,14 +269,43 @@ sort($setoresExistentes, SORT_STRING | SORT_FLAG_CASE);
   .acoes .excluir { background: #fee2e2; color: var(--vermelho); border: none; }
   .acoes .excluir:hover { background: #fecaca; }
   .vazio { text-align: center; color: #9ca3af; padding: 24px 0; }
-  .grupo { margin-bottom: 22px; }
+  .grupo {
+    background: #fff;
+    border: 1px solid var(--cinza-borda);
+    border-radius: 12px;
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
   .setor-titulo {
-    margin: 0 0 6px;
-    font-size: 0.95rem;
-    color: var(--azul-escuro);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, var(--azul), var(--azul-escuro));
+    color: #fff;
+    font-size: 1rem;
+    letter-spacing: .02em;
+  }
+  .setor-titulo .count {
+    background: rgba(255, 255, 255, .2);
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: .78rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .setor-titulo.sem-setor { background: linear-gradient(135deg, #9ca3af, #6b7280); }
+  .grupo th {
+    color: #6b7280;
+    font-size: .75rem;
     text-transform: uppercase;
     letter-spacing: .04em;
+    padding: 10px 16px;
   }
+  .grupo td { padding: 10px 16px; }
+  .grupo tbody tr:hover { background: var(--cinza); }
+  .grupo tbody tr:last-child td { border-bottom: none; }
   .aviso-login { text-align: center; color: #6b7280; font-size: 0.9rem; }
   .aviso-login a { color: var(--azul); font-weight: 600; text-decoration: none; }
   .aviso-login a:hover { text-decoration: underline; }
@@ -353,7 +382,10 @@ sort($setoresExistentes, SORT_STRING | SORT_FLAG_CASE);
     <?php else: ?>
       <?php foreach ($grupos as $setor => $lista): ?>
       <div class="grupo">
-        <h3 class="setor-titulo"><?= htmlspecialchars($setor) ?></h3>
+        <h3 class="setor-titulo<?= $setor === 'Sem setor' ? ' sem-setor' : '' ?>">
+          <span><?= htmlspecialchars($setor) ?></span>
+          <span class="count"><?= count($lista) ?> <?= count($lista) === 1 ? 'ramal' : 'ramais' ?></span>
+        </h3>
         <table>
           <thead>
             <tr>
