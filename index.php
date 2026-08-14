@@ -44,14 +44,6 @@ function salvarRamais($dataFile, $dados) {
     file_put_contents($dataFile, json_encode(array_values($dados), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 }
 
-function csv_campo($v) {
-    $v = trim((string)$v);
-    if (strpbrk($v, ";\n\"") !== false) {
-        return '"' . str_replace('"', '""', $v) . '"';
-    }
-    return $v;
-}
-
 function destacar($texto, $termo) {
     $texto = htmlspecialchars((string)$texto);
     $termo = trim((string)$termo);
@@ -61,12 +53,28 @@ function destacar($texto, $termo) {
     return is_string($r) ? $r : $texto;
 }
 
+function zip_armazenar($arquivos) {
+    $dados = '';
+    $central = '';
+    $offset = 0;
+    foreach ($arquivos as $nome => $conteudo) {
+        $crc = crc32($conteudo);
+        $tam = strlen($conteudo);
+        $len = strlen($nome);
+        $dados .= pack('VvvvvvVVVvv', 0x04034b50, 20, 0, 0, 0, 0, $crc, $tam, $tam, $len, 0) . $nome . $conteudo;
+        $central .= pack('VvvvvvvVVVvvvvvVV', 0x02014b50, 20, 20, 0, 0, 0, 0, $crc, $tam, $tam, $len, 0, 0, 0, 0, 0, $offset) . $nome;
+        $offset += 30 + $len + $tam;
+    }
+    $n = count($arquivos);
+    return $dados . $central . pack('VvvvvVVv', 0x06054b50, 0, 0, $n, $n, strlen($central), $offset, 0);
+}
+
 $ramais = carregarRamais($dataFile);
 $erro = '';
 $sucesso = '';
 
-// ---------- EXPORTAÇÃO CSV (lista completa) ----------
-if (isset($_GET['exportar']) && $_GET['exportar'] === 'csv') {
+// ---------- EXPORTAÇÃO XLSX (lista completa, formatada) ----------
+if (isset($_GET['exportar']) && $_GET['exportar'] === 'xlsx') {
     $todos = carregarRamais($dataFile);
     usort($todos, function ($a, $b) {
         $sa = mb_strtolower($a['setor'] ?? '');
@@ -74,14 +82,93 @@ if (isset($_GET['exportar']) && $_GET['exportar'] === 'csv') {
         if ($sa !== $sb) return strcmp($sa, $sb);
         return strnatcmp($a['ramal'], $b['ramal']);
     });
-    header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename="ramais.csv"');
-    echo "\xEF\xBB\xBF";
-    echo implode(';', array_map('csv_campo', ['Ramal', 'Nome', 'Cargo', 'Setor', 'E-mail'])) . "\r\n";
-    foreach ($todos as $r) {
-        $linha = [$r['ramal'] ?? '', $r['nome'] ?? '', $r['cargo'] ?? '', $r['setor'] ?? '', $r['email'] ?? ''];
-        echo implode(';', array_map('csv_campo', $linha)) . "\r\n";
+
+    $cabecalhos = ['Ramal', 'Nome', 'Cargo', 'Setor', 'E-mail'];
+    $larguras = [10, 32, 28, 26, 38];
+
+    $linhas = '<row r="1">';
+    foreach ($cabecalhos as $i => $c) {
+        $linhas .= '<c r="' . chr(65 + $i) . '1" t="inlineStr" s="1"><is><t>'
+            . htmlspecialchars($c, ENT_QUOTES, 'UTF-8') . '</t></is></c>';
     }
+    $linhas .= '</row>';
+    $linha = 2;
+    foreach ($todos as $r) {
+        $valores = [$r['ramal'] ?? '', $r['nome'] ?? '', $r['cargo'] ?? '', $r['setor'] ?? '', $r['email'] ?? ''];
+        $linhas .= '<row r="' . $linha . '">';
+        foreach ($valores as $i => $v) {
+            $linhas .= '<c r="' . chr(65 + $i) . $linha . '" t="inlineStr" s="2"><is><t>'
+                . htmlspecialchars($v, ENT_QUOTES, 'UTF-8') . '</t></is></c>';
+        }
+        $linhas .= '</row>';
+        $linha++;
+    }
+
+    $cols = '<cols>';
+    foreach ($larguras as $i => $w) {
+        $cols .= '<col min="' . ($i + 1) . '" max="' . ($i + 1) . '" width="' . $w . '" customWidth="1"/>';
+    }
+    $cols .= '</cols>';
+
+    $sheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n"
+        . '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        . $cols . '<sheetData>' . $linhas . '</sheetData>'
+        . '<autoFilter ref="A1:E' . ($linha - 1) . '"/>'
+        . '</worksheet>';
+
+    $styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n"
+        . '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        . '<fonts count="2">'
+        . '<font><sz val="11"/><name val="Calibri"/></font>'
+        . '<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>'
+        . '</fonts>'
+        . '<fills count="3">'
+        . '<fill><patternFill patternType="none"/></fill>'
+        . '<fill><patternFill patternType="gray125"/></fill>'
+        . '<fill><patternFill patternType="solid"><fgColor rgb="FF2563EB"/><bgColor indexed="64"/></patternFill></fill>'
+        . '</fills>'
+        . '<borders count="2">'
+        . '<border><left/><right/><top/><bottom/><diagonal/></border>'
+        . '<border><left style="thin"><color rgb="FFD1D5DB"/></left><right style="thin"><color rgb="FFD1D5DB"/></right>'
+        . '<top style="thin"><color rgb="FFD1D5DB"/></top><bottom style="thin"><color rgb="FFD1D5DB"/></bottom><diagonal/></border>'
+        . '</borders>'
+        . '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+        . '<cellXfs count="3">'
+        . '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+        . '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>'
+        . '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>'
+        . '</cellXfs>'
+        . '</styleSheet>';
+
+    $arquivos = [
+        '[Content_Types].xml' => '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n"
+            . '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            . '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+            . '<Default Extension="xml" ContentType="application/xml"/>'
+            . '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+            . '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+            . '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+            . '</Types>',
+        '_rels/.rels' => '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n"
+            . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            . '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+            . '</Relationships>',
+        'xl/workbook.xml' => '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n"
+            . '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            . '<sheets><sheet name="Ramais" sheetId="1" r:id="rId1"/></sheets>'
+            . '</workbook>',
+        'xl/_rels/workbook.xml.rels' => '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n"
+            . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            . '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+            . '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+            . '</Relationships>',
+        'xl/worksheets/sheet1.xml' => $sheet,
+        'xl/styles.xml' => $styles,
+    ];
+
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    header('Content-Disposition: attachment; filename="ramais.xlsx"');
+    echo zip_armazenar($arquivos);
     exit;
 }
 
@@ -242,16 +329,17 @@ if (isset($_GET['imprimir'])) {
 <title>Ramais - lista completa</title>
 <style>
   * { box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; color: #111; margin: 24px; }
-  h1 { margin: 0 0 4px; font-size: 1.4rem; color: #1e40af; }
-  .sub { color: #555; margin: 0 0 20px; font-size: .9rem; }
-  .setor { page-break-inside: avoid; margin-bottom: 18px; }
-  .setor h2 { font-size: 1rem; margin: 0 0 6px; background: #2563eb; color: #fff; padding: 6px 10px; border-radius: 6px; }
-  table { width: 100%; border-collapse: collapse; font-size: .85rem; }
-  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #ddd; }
-  th { text-transform: uppercase; font-size: .7rem; color: #555; }
+  @page { size: A4 portrait; margin: 10mm; }
+  body { font-family: Arial, sans-serif; color: #111; margin: 0; font-size: 11px; }
+  h1 { margin: 0 0 2px; font-size: 1.1rem; color: #1e40af; }
+  .sub { color: #555; margin: 0 0 12px; font-size: .8rem; }
+  .setor { page-break-inside: avoid; margin-bottom: 10px; }
+  .setor h2 { font-size: .85rem; margin: 0 0 4px; background: #2563eb; color: #fff; padding: 3px 8px; border-radius: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  th, td { text-align: left; padding: 3px 8px; border-bottom: 1px solid #ddd; }
+  th { text-transform: uppercase; font-size: .68rem; color: #555; }
   .ramal { font-weight: bold; width: 70px; }
-  .btn { margin-bottom: 16px; padding: 8px 14px; background: #2563eb; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: .9rem; }
+  .btn { margin-bottom: 10px; padding: 8px 14px; background: #2563eb; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: .9rem; }
   @media print { .btn { display: none; } }
 </style>
 </head>
@@ -263,14 +351,12 @@ if (isset($_GET['imprimir'])) {
   <div class="setor">
     <h2><?= htmlspecialchars($setor) ?> (<?= count($lista) ?>)</h2>
     <table>
-      <thead><tr><th>Ramal</th><th>Nome</th><th>Cargo</th><th>E-mail</th></tr></thead>
+      <thead><tr><th>Ramal</th><th>Nome</th></tr></thead>
       <tbody>
       <?php foreach ($lista as $r): ?>
         <tr>
           <td class="ramal"><?= htmlspecialchars($r['ramal']) ?></td>
           <td><?= htmlspecialchars($r['nome']) ?></td>
-          <td><?= htmlspecialchars($r['cargo'] ?? '') ?></td>
-          <td><?= htmlspecialchars($r['email'] ?? '') ?></td>
         </tr>
       <?php endforeach; ?>
       </tbody>
@@ -650,7 +736,7 @@ if ($logado) {
         <button type="button" class="btn-sec" id="expTodos">Expandir todos</button>
       </div>
       <div class="barra-dir">
-        <a class="btn-sec" href="?exportar=csv">Baixar CSV</a>
+        <a class="btn-sec" href="?exportar=xlsx">Baixar Excel</a>
         <a class="btn-sec" href="?imprimir=1" target="_blank">Imprimir / PDF</a>
       </div>
     </div>
