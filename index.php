@@ -29,6 +29,11 @@ if (!file_exists($dataFile)) {
     file_put_contents($dataFile, json_encode([]));
 }
 
+$buscasFile = __DIR__ . '/data/buscas.json';
+if (!file_exists($buscasFile)) {
+    file_put_contents($buscasFile, json_encode([]));
+}
+
 function carregarRamais($dataFile) {
     $conteudo = file_get_contents($dataFile);
     $dados = json_decode($conteudo, true);
@@ -39,9 +44,46 @@ function salvarRamais($dataFile, $dados) {
     file_put_contents($dataFile, json_encode(array_values($dados), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 }
 
+function csv_campo($v) {
+    $v = trim((string)$v);
+    if (strpbrk($v, ";\n\"") !== false) {
+        return '"' . str_replace('"', '""', $v) . '"';
+    }
+    return $v;
+}
+
+function destacar($texto, $termo) {
+    $texto = htmlspecialchars((string)$texto);
+    $termo = trim((string)$termo);
+    if ($termo === '') return $texto;
+    $esc = htmlspecialchars($termo);
+    $r = @preg_replace('/(' . preg_quote($esc, '/') . ')/iu', '<mark>$1</mark>', $texto);
+    return is_string($r) ? $r : $texto;
+}
+
 $ramais = carregarRamais($dataFile);
 $erro = '';
 $sucesso = '';
+
+// ---------- EXPORTAÇÃO CSV (lista completa) ----------
+if (isset($_GET['exportar']) && $_GET['exportar'] === 'csv') {
+    $todos = carregarRamais($dataFile);
+    usort($todos, function ($a, $b) {
+        $sa = mb_strtolower($a['setor'] ?? '');
+        $sb = mb_strtolower($b['setor'] ?? '');
+        if ($sa !== $sb) return strcmp($sa, $sb);
+        return strnatcmp($a['ramal'], $b['ramal']);
+    });
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="ramais.csv"');
+    echo "\xEF\xBB\xBF";
+    echo implode(';', array_map('csv_campo', ['Ramal', 'Nome', 'Cargo', 'Setor', 'E-mail'])) . "\r\n";
+    foreach ($todos as $r) {
+        $linha = [$r['ramal'] ?? '', $r['nome'] ?? '', $r['cargo'] ?? '', $r['setor'] ?? '', $r['email'] ?? ''];
+        echo implode(';', array_map('csv_campo', $linha)) . "\r\n";
+    }
+    exit;
+}
 
 // ---------- AÇÕES (POST) ----------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$logado) {
@@ -137,6 +179,20 @@ if ($busca !== '') {
             || str_contains(mb_strtolower($r['cargo'] ?? ''), $buscaLower)
             || str_contains(mb_strtolower($r['email'] ?? ''), $buscaLower);
     });
+
+    // registra a pesquisa feita (para o admin ver depois)
+    if (!$logado) {
+        $buscas = json_decode((string)@file_get_contents($buscasFile), true);
+        if (!is_array($buscas)) $buscas = [];
+        $ultimo = end($buscas);
+        $jaLogada = $ultimo && ($ultimo['termo'] ?? '') === $busca
+            && (time() - strtotime((string)($ultimo['quando'] ?? '')) < 300);
+        if (!$jaLogada) {
+            $buscas[] = ['termo' => $busca, 'quando' => date('Y-m-d H:i:s')];
+            $buscas = array_slice($buscas, -100);
+            file_put_contents($buscasFile, json_encode($buscas, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        }
+    }
 }
 
 // ordena por setor e depois por ramal
@@ -162,6 +218,91 @@ foreach (carregarRamais($dataFile) as $r) {
     if ($s !== '' && !in_array($s, $setoresExistentes)) $setoresExistentes[] = $s;
 }
 sort($setoresExistentes, SORT_STRING | SORT_FLAG_CASE);
+
+// ---------- IMPRESSÃO / PDF (lista completa) ----------
+if (isset($_GET['imprimir'])) {
+    $todos = carregarRamais($dataFile);
+    usort($todos, function ($a, $b) {
+        $sa = mb_strtolower($a['setor'] ?? '');
+        $sb = mb_strtolower($b['setor'] ?? '');
+        if ($sa !== $sb) return strcmp($sa, $sb);
+        return strnatcmp($a['ramal'], $b['ramal']);
+    });
+    $g = [];
+    foreach ($todos as $r) {
+        $s = trim($r['setor'] ?? '');
+        if ($s === '') $s = 'Sem setor';
+        $g[$s][] = $r;
+    }
+    ?>
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>Ramais - lista completa</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; color: #111; margin: 24px; }
+  h1 { margin: 0 0 4px; font-size: 1.4rem; color: #1e40af; }
+  .sub { color: #555; margin: 0 0 20px; font-size: .9rem; }
+  .setor { page-break-inside: avoid; margin-bottom: 18px; }
+  .setor h2 { font-size: 1rem; margin: 0 0 6px; background: #2563eb; color: #fff; padding: 6px 10px; border-radius: 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #ddd; }
+  th { text-transform: uppercase; font-size: .7rem; color: #555; }
+  .ramal { font-weight: bold; width: 70px; }
+  .btn { margin-bottom: 16px; padding: 8px 14px; background: #2563eb; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: .9rem; }
+  @media print { .btn { display: none; } }
+</style>
+</head>
+<body>
+  <button class="btn" onclick="window.print()">Imprimir / salvar PDF</button>
+  <h1>Lista de Ramais</h1>
+  <p class="sub">Gerada em <?= date('d/m/Y H:i') ?> - Total de <?= count($todos) ?> ramais</p>
+  <?php foreach ($g as $setor => $lista): ?>
+  <div class="setor">
+    <h2><?= htmlspecialchars($setor) ?> (<?= count($lista) ?>)</h2>
+    <table>
+      <thead><tr><th>Ramal</th><th>Nome</th><th>Cargo</th><th>E-mail</th></tr></thead>
+      <tbody>
+      <?php foreach ($lista as $r): ?>
+        <tr>
+          <td class="ramal"><?= htmlspecialchars($r['ramal']) ?></td>
+          <td><?= htmlspecialchars($r['nome']) ?></td>
+          <td><?= htmlspecialchars($r['cargo'] ?? '') ?></td>
+          <td><?= htmlspecialchars($r['email'] ?? '') ?></td>
+        </tr>
+      <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+  <?php endforeach; ?>
+  <script>window.print();</script>
+</body>
+</html>
+    <?php
+    exit;
+}
+
+// ---------- RESUMO DAS PESQUISAS (para quem esta logado) ----------
+$buscasResumo = [];
+if ($logado) {
+    $buscas = json_decode((string)@file_get_contents($buscasFile), true);
+    if (!is_array($buscas)) $buscas = [];
+    foreach (array_reverse($buscas) as $b) {
+        $t = mb_strtolower(trim($b['termo'] ?? ''));
+        if ($t === '') continue;
+        $quando = $b['quando'] ?? '';
+        if (!isset($buscasResumo[$t])) {
+            $buscasResumo[$t] = ['termo' => $b['termo'], 'qtd' => 0, 'ultima' => $quando];
+        }
+        $buscasResumo[$t]['qtd']++;
+        if ($quando > $buscasResumo[$t]['ultima']) $buscasResumo[$t]['ultima'] = $quando;
+    }
+    usort($buscasResumo, function ($a, $b) {
+        return strcmp($b['ultima'], $a['ultima']);
+    });
+}
 ?>
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -361,6 +502,46 @@ sort($setoresExistentes, SORT_STRING | SORT_FLAG_CASE);
   .aviso-login { text-align: center; color: #6b7280; font-size: 0.9rem; }
   .aviso-login a { color: var(--azul); font-weight: 600; text-decoration: none; }
   .aviso-login a:hover { text-decoration: underline; }
+  mark {
+    background: #fde68a;
+    color: inherit;
+    border-radius: 3px;
+    padding: 0 2px;
+  }
+  .barra {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .barra-esq, .barra-dir {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .btn-sec {
+    background: #fff;
+    color: var(--azul-escuro);
+    border: 1px solid var(--cinza-borda);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: .85rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+  }
+  .btn-sec:hover { background: var(--cinza); }
+  .card-titulo {
+    margin: 0 0 12px;
+    font-size: 1rem;
+    color: var(--azul-escuro);
+  }
+  .tbl-pesquisas th { font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; color: #6b7280; }
+  .tbl-pesquisas a { color: var(--azul); text-decoration: none; font-weight: 600; }
+  .tbl-pesquisas a:hover { text-decoration: underline; }
+  .tbl-pesquisas td.qtd { text-align: center; color: #6b7280; }
   footer { text-align: center; color: #9ca3af; font-size: 0.8rem; margin-top: 24px; }
 </style>
 </head>
@@ -432,12 +613,47 @@ sort($setoresExistentes, SORT_STRING | SORT_FLAG_CASE);
   </div>
   <?php endif; ?>
 
+  <?php if ($logado && !empty($buscasResumo)): ?>
+  <div class="card">
+    <h3 class="card-titulo">Pesquisas dos visitantes</h3>
+    <table class="tbl-pesquisas">
+      <thead>
+        <tr>
+          <th>Pesquisa</th>
+          <th>Vezes</th>
+          <th>Última vez</th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php foreach ($buscasResumo as $b): ?>
+          <tr>
+            <td><a href="?busca=<?= urlencode($b['termo']) ?>"><?= htmlspecialchars($b['termo']) ?></a></td>
+            <td class="qtd"><?= $b['qtd'] ?></td>
+            <td><?= htmlspecialchars($b['ultima']) ?></td>
+          </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+  <?php endif; ?>
+
   <div class="card">
     <form class="busca" method="get">
       <input type="text" name="busca" placeholder="🔍 Buscar por ramal, nome, cargo, setor ou e-mail..."
              value="<?= htmlspecialchars($busca) ?>"
              onchange="this.form.submit()">
     </form>
+
+    <div class="barra">
+      <div class="barra-esq">
+        <button type="button" class="btn-sec" id="minTodos">Minimizar todos</button>
+        <button type="button" class="btn-sec" id="expTodos">Expandir todos</button>
+      </div>
+      <div class="barra-dir">
+        <a class="btn-sec" href="?exportar=csv">Baixar CSV</a>
+        <a class="btn-sec" href="?imprimir=1" target="_blank">Imprimir / PDF</a>
+      </div>
+    </div>
 
     <?php if (empty($ramais)): ?>
       <div class="vazio">Nenhum ramal cadastrado ainda.</div>
@@ -449,7 +665,7 @@ sort($setoresExistentes, SORT_STRING | SORT_FLAG_CASE);
             <button type="button" class="setor-btn" title="Minimizar/expandir setor" aria-expanded="true">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
             </button>
-            <span class="nome-setor"><?= htmlspecialchars($setor) ?></span>
+            <span class="nome-setor"><?= destacar($setor, $busca) ?></span>
           </span>
           <span class="count"><?= count($lista) ?> <?= count($lista) === 1 ? 'ramal' : 'ramais' ?></span>
         </h3>
@@ -466,16 +682,16 @@ sort($setoresExistentes, SORT_STRING | SORT_FLAG_CASE);
           <tbody>
             <?php foreach ($lista as $r): ?>
               <tr>
-                <td class="ramal-col"><?= htmlspecialchars($r['ramal']) ?></td>
+                <td class="ramal-col"><?= destacar($r['ramal'], $busca) ?></td>
                 <td>
-                  <div class="nome"><?= htmlspecialchars($r['nome']) ?></div>
+                  <div class="nome"><?= destacar($r['nome'], $busca) ?></div>
                   <?php if (!empty($r['cargo'])): ?>
-                    <div class="cargo"><?= htmlspecialchars($r['cargo']) ?></div>
+                    <div class="cargo"><?= destacar($r['cargo'], $busca) ?></div>
                   <?php endif; ?>
                 </td>
                 <td>
                   <?php if (!empty($r['email'])): ?>
-                    <a class="email" href="mailto:<?= htmlspecialchars($r['email']) ?>"><?= htmlspecialchars($r['email']) ?></a>
+                    <a class="email" href="mailto:<?= htmlspecialchars($r['email']) ?>"><?= destacar($r['email'], $busca) ?></a>
                   <?php else: ?>
                     <span class="sem-email">—</span>
                   <?php endif; ?>
@@ -513,36 +729,52 @@ sort($setoresExistentes, SORT_STRING | SORT_FLAG_CASE);
     minimizados = JSON.parse(localStorage.getItem(chave) || '[]');
   } catch (e) {}
 
+  var grupos = Array.prototype.slice.call(document.querySelectorAll('.grupo'));
+
   function salvar() {
     try { localStorage.setItem(chave, JSON.stringify(minimizados)); } catch (e) {}
   }
 
-  document.querySelectorAll('.grupo').forEach(function (grupo) {
-    var setor = grupo.getAttribute('data-setor');
+  function aplicar(grupo, min) {
     var corpo = grupo.querySelector('.corpo');
     var btn = grupo.querySelector('.setor-btn');
+    grupo.classList.toggle('minimizado', min);
+    if (btn) btn.setAttribute('aria-expanded', min ? 'false' : 'true');
+    if (corpo) corpo.style.maxHeight = min ? '0px' : corpo.scrollHeight + 'px';
+  }
 
-    function setMinimizado(min) {
-      grupo.classList.toggle('minimizado', min);
-      if (btn) btn.setAttribute('aria-expanded', min ? 'false' : 'true');
-      corpo.style.maxHeight = min ? '0px' : corpo.scrollHeight + 'px';
-    }
+  grupos.forEach(function (grupo) {
+    var setor = grupo.getAttribute('data-setor');
+    var btn = grupo.querySelector('.setor-btn');
 
     if (!buscaAtiva && minimizados.indexOf(setor) !== -1) {
-      setMinimizado(true);
+      aplicar(grupo, true);
     } else {
-      corpo.style.maxHeight = corpo.scrollHeight + 'px';
+      aplicar(grupo, false);
     }
 
     if (btn) btn.addEventListener('click', function (e) {
       e.stopPropagation();
       var min = !grupo.classList.contains('minimizado');
-      setMinimizado(min);
+      aplicar(grupo, min);
       var idx = minimizados.indexOf(setor);
       if (min && idx === -1) minimizados.push(setor);
       if (!min && idx !== -1) minimizados.splice(idx, 1);
       salvar();
     });
+  });
+
+  var minTodos = document.getElementById('minTodos');
+  var expTodos = document.getElementById('expTodos');
+  if (minTodos) minTodos.addEventListener('click', function () {
+    minimizados = grupos.map(function (g) { return g.getAttribute('data-setor'); });
+    salvar();
+    grupos.forEach(function (g) { aplicar(g, true); });
+  });
+  if (expTodos) expTodos.addEventListener('click', function () {
+    minimizados = [];
+    salvar();
+    grupos.forEach(function (g) { aplicar(g, false); });
   });
 })();
 </script>
