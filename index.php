@@ -7,6 +7,18 @@
 session_start();
 $logado = isset($_SESSION['logado']) && $_SESSION['logado'] === true;
 
+// compatibilidade: funciona mesmo sem a extensao mbstring ou em PHP < 8
+if (!function_exists('str_contains')) {
+    function str_contains($haystack, $needle) {
+        return $needle === '' || strpos($haystack, $needle) !== false;
+    }
+}
+if (!function_exists('mb_strtolower')) {
+    function mb_strtolower($string) {
+        return strtolower($string);
+    }
+}
+
 $dataFile = __DIR__ . '/data/ramais.json';
 
 // garante que a pasta/arquivo de dados existe
