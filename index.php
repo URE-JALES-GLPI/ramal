@@ -352,7 +352,7 @@ if (isset($_GET['imprimir'])) {
   .blocos table + table { float: right; }
   th, td { border: 1px solid #999; padding: 2px 6px; text-align: left; }
   th { background: #444; color: #fff; font-weight: bold; }
-  tr.setor-head td { background: #d9d9d9; font-weight: bold; }
+  tr.setor-head td { background: #b0b0b0; font-weight: bold; }
   td.ramal { font-weight: bold; white-space: nowrap; }
   tr { page-break-inside: avoid; }
   .btn { margin-bottom: 10px; padding: 8px 14px; background: #2563eb; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: .9rem; }
