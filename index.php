@@ -306,21 +306,17 @@ foreach (carregarRamais($dataFile) as $r) {
 }
 sort($setoresExistentes, SORT_STRING | SORT_FLAG_CASE);
 
-// ---------- IMPRESSÃO / PDF (lista completa) ----------
+// ---------- IMPRESSÃO / PDF (lista completa, estilo Excel) ----------
 if (isset($_GET['imprimir'])) {
     $todos = carregarRamais($dataFile);
     usort($todos, function ($a, $b) {
-        $sa = mb_strtolower($a['setor'] ?? '');
-        $sb = mb_strtolower($b['setor'] ?? '');
-        if ($sa !== $sb) return strcmp($sa, $sb);
         return strnatcmp($a['ramal'], $b['ramal']);
     });
-    $g = [];
-    foreach ($todos as $r) {
-        $s = trim($r['setor'] ?? '');
-        if ($s === '') $s = 'Sem setor';
-        $g[$s][] = $r;
-    }
+    $metade = (int)ceil(count($todos) / 2);
+    $esquerda = array_slice($todos, 0, $metade);
+    $direita = array_slice($todos, $metade);
+    $linhas = max(count($esquerda), count($direita));
+    $total = count($todos);
     ?>
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -330,15 +326,15 @@ if (isset($_GET['imprimir'])) {
 <style>
   * { box-sizing: border-box; }
   @page { size: A4 portrait; margin: 10mm; }
-  body { font-family: Arial, sans-serif; color: #111; margin: 0; font-size: 11px; }
-  h1 { margin: 0 0 2px; font-size: 1.1rem; color: #1e40af; }
-  .sub { color: #555; margin: 0 0 12px; font-size: .8rem; }
-  .setor { page-break-inside: avoid; margin-bottom: 10px; }
-  .setor h2 { font-size: .85rem; margin: 0 0 4px; background: #2563eb; color: #fff; padding: 3px 8px; border-radius: 4px; }
-  table { width: 100%; border-collapse: collapse; font-size: 11px; }
-  th, td { text-align: left; padding: 3px 8px; border-bottom: 1px solid #ddd; }
-  th { text-transform: uppercase; font-size: .68rem; color: #555; }
-  .ramal { font-weight: bold; width: 70px; }
+  body { font-family: Arial, sans-serif; color: #000; margin: 0; font-size: 10.5px; }
+  h1 { margin: 0 0 2px; font-size: 1.2rem; }
+  .sub { color: #444; margin: 0 0 10px; font-size: .8rem; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #999; padding: 2px 6px; text-align: left; }
+  th { background: #444; color: #fff; font-weight: bold; }
+  td.sep, th.sep { border: none; background: #fff; width: 10px; padding: 0; }
+  td.ramal { font-weight: bold; white-space: nowrap; }
+  tr { page-break-inside: avoid; }
   .btn { margin-bottom: 10px; padding: 8px 14px; background: #2563eb; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: .9rem; }
   @media print { .btn { display: none; } }
 </style>
@@ -346,23 +342,33 @@ if (isset($_GET['imprimir'])) {
 <body>
   <button class="btn" onclick="window.print()">Imprimir / salvar PDF</button>
   <h1>Lista de Ramais</h1>
-  <p class="sub">Gerada em <?= date('d/m/Y H:i') ?> - Total de <?= count($todos) ?> ramais</p>
-  <?php foreach ($g as $setor => $lista): ?>
-  <div class="setor">
-    <h2><?= htmlspecialchars($setor) ?> (<?= count($lista) ?>)</h2>
-    <table>
-      <thead><tr><th>Ramal</th><th>Nome</th></tr></thead>
-      <tbody>
-      <?php foreach ($lista as $r): ?>
-        <tr>
-          <td class="ramal"><?= htmlspecialchars($r['ramal']) ?></td>
-          <td><?= htmlspecialchars($r['nome']) ?></td>
-        </tr>
-      <?php endforeach; ?>
-      </tbody>
-    </table>
-  </div>
-  <?php endforeach; ?>
+  <p class="sub">Gerada em <?= date('d/m/Y H:i') ?> - Total de <?= $total ?> ramais</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Ramal</th>
+        <th>Usuário</th>
+        <th>Núcleo</th>
+        <th class="sep"></th>
+        <th>Ramal</th>
+        <th>Usuário</th>
+        <th>Núcleo</th>
+      </tr>
+    </thead>
+    <tbody>
+      <?php for ($i = 0; $i < $linhas; $i++): ?>
+      <tr>
+        <td class="ramal"><?= htmlspecialchars($esquerda[$i]['ramal'] ?? '') ?></td>
+        <td><?= htmlspecialchars($esquerda[$i]['nome'] ?? '') ?></td>
+        <td><?= htmlspecialchars($esquerda[$i]['setor'] ?? '') ?></td>
+        <td class="sep"></td>
+        <td class="ramal"><?= htmlspecialchars($direita[$i]['ramal'] ?? '') ?></td>
+        <td><?= htmlspecialchars($direita[$i]['nome'] ?? '') ?></td>
+        <td><?= htmlspecialchars($direita[$i]['setor'] ?? '') ?></td>
+      </tr>
+      <?php endfor; ?>
+    </tbody>
+  </table>
   <script>window.print();</script>
 </body>
 </html>
