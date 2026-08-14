@@ -342,7 +342,7 @@ if (isset($_GET['imprimir'])) {
 <meta charset="UTF-8">
 <title>Ramais - lista completa</title>
 <style>
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   @page { size: A4 portrait; margin: 8mm; }
   body { font-family: Arial, sans-serif; color: #000; margin: 0; font-size: 10px; }
   h1 { margin: 0 0 2px; font-size: 1.2rem; }
