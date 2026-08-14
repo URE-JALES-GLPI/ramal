@@ -325,13 +325,12 @@ if (isset($_GET['imprimir'])) {
             $setor = trim($r['setor'] ?? '');
             if ($setor === '') $setor = 'Sem setor';
             if ($setor !== $setorAtual) {
-                echo '<tr class="setor-head"><td colspan="3">' . htmlspecialchars($setor) . '</td></tr>';
+                echo '<tr class="setor-head"><td colspan="2">' . htmlspecialchars($setor) . '</td></tr>';
                 $setorAtual = $setor;
             }
             echo '<tr>'
                 . '<td class="ramal">' . htmlspecialchars($r['ramal'] ?? '') . '</td>'
                 . '<td>' . htmlspecialchars($r['nome'] ?? '') . '</td>'
-                . '<td>' . htmlspecialchars($setor) . '</td>'
                 . '</tr>';
         }
     }
@@ -365,14 +364,14 @@ if (isset($_GET['imprimir'])) {
   <p class="sub">Gerada em <?= date('d/m/Y H:i') ?> - Total de <?= $total ?> ramais</p>
   <div class="blocos">
     <table>
-      <thead><tr><th>Ramal</th><th>Usuário</th><th>Núcleo</th></tr></thead>
+      <thead><tr><th>Ramal</th><th>Usuário</th></tr></thead>
       <tbody>
         <?php blocoImpressao($blocos[0]); ?>
       </tbody>
     </table>
     <?php if (!empty($blocos[1])): ?>
     <table>
-      <thead><tr><th>Ramal</th><th>Usuário</th><th>Núcleo</th></tr></thead>
+      <thead><tr><th>Ramal</th><th>Usuário</th></tr></thead>
       <tbody>
         <?php blocoImpressao($blocos[1]); ?>
       </tbody>
