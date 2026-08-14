@@ -44,6 +44,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $ramal = trim($_POST['ramal'] ?? '');
         $nome  = trim($_POST['nome'] ?? '');
         $setor = trim($_POST['setor'] ?? '');
+        $cargo = trim($_POST['cargo'] ?? '');
+        $email = trim($_POST['email'] ?? '');
         $idEdicao = trim($_POST['id_edicao'] ?? '');
 
         if ($ramal === '' || $nome === '') {
@@ -68,6 +70,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $r['ramal'] = $ramal;
                             $r['nome'] = $nome;
                             $r['setor'] = $setor;
+                            $r['cargo'] = $cargo;
+                            $r['email'] = $email;
                         }
                     }
                     unset($r);
@@ -79,6 +83,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'ramal' => $ramal,
                         'nome' => $nome,
                         'setor' => $setor,
+                        'cargo' => $cargo,
+                        'email' => $email,
                     ];
                     $sucesso = 'Ramal cadastrado com sucesso.';
                 }
@@ -115,7 +121,9 @@ if ($busca !== '') {
     $ramais = array_filter($ramais, function ($r) use ($buscaLower) {
         return str_contains(mb_strtolower($r['ramal']), $buscaLower)
             || str_contains(mb_strtolower($r['nome']), $buscaLower)
-            || str_contains(mb_strtolower($r['setor'] ?? ''), $buscaLower);
+            || str_contains(mb_strtolower($r['setor'] ?? ''), $buscaLower)
+            || str_contains(mb_strtolower($r['cargo'] ?? ''), $buscaLower)
+            || str_contains(mb_strtolower($r['email'] ?? ''), $buscaLower);
     });
 }
 
@@ -258,6 +266,11 @@ sort($setoresExistentes, SORT_STRING | SORT_FLAG_CASE);
   }
   th { color: #6b7280; font-size: 0.8rem; text-transform: uppercase; letter-spacing: .03em; }
   td.ramal-col { font-weight: 700; color: var(--azul-escuro); width: 90px; }
+  .nome { font-weight: 600; }
+  .cargo { font-size: 0.8rem; color: #6b7280; }
+  .email { color: var(--azul); text-decoration: none; font-size: 0.9rem; }
+  .email:hover { text-decoration: underline; }
+  .sem-email { color: #d1d5db; }
   .acoes { display: flex; gap: 8px; }
   .acoes a, .acoes button {
     font-size: 0.82rem;
@@ -349,6 +362,11 @@ sort($setoresExistentes, SORT_STRING | SORT_FLAG_CASE);
                value="<?= htmlspecialchars($emEdicao['nome'] ?? '') ?>" placeholder="Ex: João Silva">
       </div>
       <div class="campo" style="flex:1">
+        <label for="cargo">Cargo</label>
+        <input type="text" id="cargo" name="cargo"
+               value="<?= htmlspecialchars($emEdicao['cargo'] ?? '') ?>" placeholder="Ex: Analista">
+      </div>
+      <div class="campo" style="flex:1">
         <label for="setor">Setor</label>
         <input type="text" id="setor" name="setor" list="lista-setores"
                value="<?= htmlspecialchars($emEdicao['setor'] ?? '') ?>" placeholder="Ex: Financeiro">
@@ -357,6 +375,11 @@ sort($setoresExistentes, SORT_STRING | SORT_FLAG_CASE);
             <option value="<?= htmlspecialchars($s) ?>"></option>
           <?php endforeach; ?>
         </datalist>
+      </div>
+      <div class="campo" style="flex:1">
+        <label for="email">E-mail</label>
+        <input type="email" id="email" name="email"
+               value="<?= htmlspecialchars($emEdicao['email'] ?? '') ?>" placeholder="Ex: joao@empresa.com">
       </div>
       <button type="submit"><?= $emEdicao ? 'Salvar alteração' : 'Cadastrar' ?></button>
       <?php if ($emEdicao): ?>
@@ -372,7 +395,7 @@ sort($setoresExistentes, SORT_STRING | SORT_FLAG_CASE);
 
   <div class="card">
     <form class="busca" method="get">
-      <input type="text" name="busca" placeholder="🔍 Buscar por ramal, nome ou setor..."
+      <input type="text" name="busca" placeholder="🔍 Buscar por ramal, nome, cargo, setor ou e-mail..."
              value="<?= htmlspecialchars($busca) ?>"
              onchange="this.form.submit()">
     </form>
@@ -391,6 +414,7 @@ sort($setoresExistentes, SORT_STRING | SORT_FLAG_CASE);
             <tr>
               <th>Ramal</th>
               <th>Nome</th>
+              <th>E-mail</th>
               <?php if ($logado): ?><th></th><?php endif; ?>
             </tr>
           </thead>
@@ -398,7 +422,19 @@ sort($setoresExistentes, SORT_STRING | SORT_FLAG_CASE);
             <?php foreach ($lista as $r): ?>
               <tr>
                 <td class="ramal-col"><?= htmlspecialchars($r['ramal']) ?></td>
-                <td><?= htmlspecialchars($r['nome']) ?></td>
+                <td>
+                  <div class="nome"><?= htmlspecialchars($r['nome']) ?></div>
+                  <?php if (!empty($r['cargo'])): ?>
+                    <div class="cargo"><?= htmlspecialchars($r['cargo']) ?></div>
+                  <?php endif; ?>
+                </td>
+                <td>
+                  <?php if (!empty($r['email'])): ?>
+                    <a class="email" href="mailto:<?= htmlspecialchars($r['email']) ?>"><?= htmlspecialchars($r['email']) ?></a>
+                  <?php else: ?>
+                    <span class="sem-email">—</span>
+                  <?php endif; ?>
+                </td>
                 <?php if ($logado): ?>
                 <td class="acoes">
                   <a class="editar" href="?editar=<?= urlencode($r['id']) ?>">Editar</a>
