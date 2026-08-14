@@ -43,6 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($acao === 'salvar') {
         $ramal = trim($_POST['ramal'] ?? '');
         $nome  = trim($_POST['nome'] ?? '');
+        $setor = trim($_POST['setor'] ?? '');
         $idEdicao = trim($_POST['id_edicao'] ?? '');
 
         if ($ramal === '' || $nome === '') {
@@ -66,6 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if ($r['id'] === $idEdicao) {
                             $r['ramal'] = $ramal;
                             $r['nome'] = $nome;
+                            $r['setor'] = $setor;
                         }
                     }
                     unset($r);
@@ -76,6 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'id' => uniqid(),
                         'ramal' => $ramal,
                         'nome' => $nome,
+                        'setor' => $setor,
                     ];
                     $sucesso = 'Ramal cadastrado com sucesso.';
                 }
@@ -111,12 +114,34 @@ if ($busca !== '') {
     $buscaLower = mb_strtolower($busca);
     $ramais = array_filter($ramais, function ($r) use ($buscaLower) {
         return str_contains(mb_strtolower($r['ramal']), $buscaLower)
-            || str_contains(mb_strtolower($r['nome']), $buscaLower);
+            || str_contains(mb_strtolower($r['nome']), $buscaLower)
+            || str_contains(mb_strtolower($r['setor'] ?? ''), $buscaLower);
     });
 }
 
-// ordena por ramal
-usort($ramais, fn($a, $b) => strnatcmp($a['ramal'], $b['ramal']));
+// ordena por setor e depois por ramal
+usort($ramais, function ($a, $b) {
+    $sa = mb_strtolower($a['setor'] ?? '');
+    $sb = mb_strtolower($b['setor'] ?? '');
+    if ($sa !== $sb) return strcmp($sa, $sb);
+    return strnatcmp($a['ramal'], $b['ramal']);
+});
+
+// agrupa por setor para exibicao
+$grupos = [];
+foreach ($ramais as $r) {
+    $setor = trim($r['setor'] ?? '');
+    if ($setor === '') $setor = 'Sem setor';
+    $grupos[$setor][] = $r;
+}
+
+// lista de setores existentes (para o datalist do formulario)
+$setoresExistentes = [];
+foreach (carregarRamais($dataFile) as $r) {
+    $s = trim($r['setor'] ?? '');
+    if ($s !== '' && !in_array($s, $setoresExistentes)) $setoresExistentes[] = $s;
+}
+sort($setoresExistentes, SORT_STRING | SORT_FLAG_CASE);
 ?>
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -244,6 +269,14 @@ usort($ramais, fn($a, $b) => strnatcmp($a['ramal'], $b['ramal']));
   .acoes .excluir { background: #fee2e2; color: var(--vermelho); border: none; }
   .acoes .excluir:hover { background: #fecaca; }
   .vazio { text-align: center; color: #9ca3af; padding: 24px 0; }
+  .grupo { margin-bottom: 22px; }
+  .setor-titulo {
+    margin: 0 0 6px;
+    font-size: 0.95rem;
+    color: var(--azul-escuro);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
   .aviso-login { text-align: center; color: #6b7280; font-size: 0.9rem; }
   .aviso-login a { color: var(--azul); font-weight: 600; text-decoration: none; }
   .aviso-login a:hover { text-decoration: underline; }
@@ -286,6 +319,16 @@ usort($ramais, fn($a, $b) => strnatcmp($a['ramal'], $b['ramal']));
         <input type="text" id="nome" name="nome" required
                value="<?= htmlspecialchars($emEdicao['nome'] ?? '') ?>" placeholder="Ex: João Silva">
       </div>
+      <div class="campo" style="flex:1">
+        <label for="setor">Setor</label>
+        <input type="text" id="setor" name="setor" list="lista-setores"
+               value="<?= htmlspecialchars($emEdicao['setor'] ?? '') ?>" placeholder="Ex: Financeiro">
+        <datalist id="lista-setores">
+          <?php foreach ($setoresExistentes as $s): ?>
+            <option value="<?= htmlspecialchars($s) ?>"></option>
+          <?php endforeach; ?>
+        </datalist>
+      </div>
       <button type="submit"><?= $emEdicao ? 'Salvar alteração' : 'Cadastrar' ?></button>
       <?php if ($emEdicao): ?>
         <a class="btn btn-cancelar" href="index.php">Cancelar</a>
@@ -300,7 +343,7 @@ usort($ramais, fn($a, $b) => strnatcmp($a['ramal'], $b['ramal']));
 
   <div class="card">
     <form class="busca" method="get">
-      <input type="text" name="busca" placeholder="🔍 Buscar por ramal ou nome..."
+      <input type="text" name="busca" placeholder="🔍 Buscar por ramal, nome ou setor..."
              value="<?= htmlspecialchars($busca) ?>"
              onchange="this.form.submit()">
     </form>
@@ -308,33 +351,38 @@ usort($ramais, fn($a, $b) => strnatcmp($a['ramal'], $b['ramal']));
     <?php if (empty($ramais)): ?>
       <div class="vazio">Nenhum ramal cadastrado ainda.</div>
     <?php else: ?>
-      <table>
-        <thead>
-          <tr>
-            <th>Ramal</th>
-            <th>Nome</th>
-            <?php if ($logado): ?><th></th><?php endif; ?>
-          </tr>
-        </thead>
-        <tbody>
-          <?php foreach ($ramais as $r): ?>
+      <?php foreach ($grupos as $setor => $lista): ?>
+      <div class="grupo">
+        <h3 class="setor-titulo"><?= htmlspecialchars($setor) ?></h3>
+        <table>
+          <thead>
             <tr>
-              <td class="ramal-col"><?= htmlspecialchars($r['ramal']) ?></td>
-              <td><?= htmlspecialchars($r['nome']) ?></td>
-              <?php if ($logado): ?>
-              <td class="acoes">
-                <a class="editar" href="?editar=<?= urlencode($r['id']) ?>">Editar</a>
-                <form method="post" onsubmit="return confirm('Excluir o ramal <?= htmlspecialchars($r['ramal']) ?>?');" style="display:inline">
-                  <input type="hidden" name="acao" value="excluir">
-                  <input type="hidden" name="id" value="<?= htmlspecialchars($r['id']) ?>">
-                  <button type="submit" class="excluir">Excluir</button>
-                </form>
-              </td>
-              <?php endif; ?>
+              <th>Ramal</th>
+              <th>Nome</th>
+              <?php if ($logado): ?><th></th><?php endif; ?>
             </tr>
-          <?php endforeach; ?>
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            <?php foreach ($lista as $r): ?>
+              <tr>
+                <td class="ramal-col"><?= htmlspecialchars($r['ramal']) ?></td>
+                <td><?= htmlspecialchars($r['nome']) ?></td>
+                <?php if ($logado): ?>
+                <td class="acoes">
+                  <a class="editar" href="?editar=<?= urlencode($r['id']) ?>">Editar</a>
+                  <form method="post" onsubmit="return confirm('Excluir o ramal <?= htmlspecialchars($r['ramal']) ?>?');" style="display:inline">
+                    <input type="hidden" name="acao" value="excluir">
+                    <input type="hidden" name="id" value="<?= htmlspecialchars($r['id']) ?>">
+                    <button type="submit" class="excluir">Excluir</button>
+                  </form>
+                </td>
+                <?php endif; ?>
+              </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+      <?php endforeach; ?>
     <?php endif; ?>
   </div>
 
