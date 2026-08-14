@@ -306,17 +306,35 @@ foreach (carregarRamais($dataFile) as $r) {
 }
 sort($setoresExistentes, SORT_STRING | SORT_FLAG_CASE);
 
-// ---------- IMPRESSÃO / PDF (lista completa, estilo Excel) ----------
+// ---------- IMPRESSÃO / PDF (lista completa, estilo Excel por setor) ----------
 if (isset($_GET['imprimir'])) {
     $todos = carregarRamais($dataFile);
     usort($todos, function ($a, $b) {
+        $sa = mb_strtolower($a['setor'] ?? '');
+        $sb = mb_strtolower($b['setor'] ?? '');
+        if ($sa !== $sb) return strcmp($sa, $sb);
         return strnatcmp($a['ramal'], $b['ramal']);
     });
     $metade = (int)ceil(count($todos) / 2);
-    $esquerda = array_slice($todos, 0, $metade);
-    $direita = array_slice($todos, $metade);
-    $linhas = max(count($esquerda), count($direita));
+    $blocos = [array_slice($todos, 0, $metade), array_slice($todos, $metade)];
     $total = count($todos);
+
+    function blocoImpressao($lista) {
+        $setorAtual = null;
+        foreach ($lista as $r) {
+            $setor = trim($r['setor'] ?? '');
+            if ($setor === '') $setor = 'Sem setor';
+            if ($setor !== $setorAtual) {
+                echo '<tr class="setor-head"><td colspan="3">' . htmlspecialchars($setor) . '</td></tr>';
+                $setorAtual = $setor;
+            }
+            echo '<tr>'
+                . '<td class="ramal">' . htmlspecialchars($r['ramal'] ?? '') . '</td>'
+                . '<td>' . htmlspecialchars($r['nome'] ?? '') . '</td>'
+                . '<td>' . htmlspecialchars($setor) . '</td>'
+                . '</tr>';
+        }
+    }
     ?>
 <!DOCTYPE html>
 <html lang="pt-br">
@@ -325,14 +343,16 @@ if (isset($_GET['imprimir'])) {
 <title>Ramais - lista completa</title>
 <style>
   * { box-sizing: border-box; }
-  @page { size: A4 portrait; margin: 10mm; }
-  body { font-family: Arial, sans-serif; color: #000; margin: 0; font-size: 10.5px; }
+  @page { size: A4 portrait; margin: 8mm; }
+  body { font-family: Arial, sans-serif; color: #000; margin: 0; font-size: 10px; }
   h1 { margin: 0 0 2px; font-size: 1.2rem; }
   .sub { color: #444; margin: 0 0 10px; font-size: .8rem; }
-  table { width: 100%; border-collapse: collapse; }
+  .blocos { width: 100%; overflow: hidden; }
+  .blocos table { width: 49%; float: left; border-collapse: collapse; }
+  .blocos table + table { float: right; }
   th, td { border: 1px solid #999; padding: 2px 6px; text-align: left; }
   th { background: #444; color: #fff; font-weight: bold; }
-  td.sep, th.sep { border: none; background: #fff; width: 10px; padding: 0; }
+  tr.setor-head td { background: #d9d9d9; font-weight: bold; }
   td.ramal { font-weight: bold; white-space: nowrap; }
   tr { page-break-inside: avoid; }
   .btn { margin-bottom: 10px; padding: 8px 14px; background: #2563eb; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: .9rem; }
@@ -343,32 +363,22 @@ if (isset($_GET['imprimir'])) {
   <button class="btn" onclick="window.print()">Imprimir / salvar PDF</button>
   <h1>Lista de Ramais</h1>
   <p class="sub">Gerada em <?= date('d/m/Y H:i') ?> - Total de <?= $total ?> ramais</p>
-  <table>
-    <thead>
-      <tr>
-        <th>Ramal</th>
-        <th>Usuário</th>
-        <th>Núcleo</th>
-        <th class="sep"></th>
-        <th>Ramal</th>
-        <th>Usuário</th>
-        <th>Núcleo</th>
-      </tr>
-    </thead>
-    <tbody>
-      <?php for ($i = 0; $i < $linhas; $i++): ?>
-      <tr>
-        <td class="ramal"><?= htmlspecialchars($esquerda[$i]['ramal'] ?? '') ?></td>
-        <td><?= htmlspecialchars($esquerda[$i]['nome'] ?? '') ?></td>
-        <td><?= htmlspecialchars($esquerda[$i]['setor'] ?? '') ?></td>
-        <td class="sep"></td>
-        <td class="ramal"><?= htmlspecialchars($direita[$i]['ramal'] ?? '') ?></td>
-        <td><?= htmlspecialchars($direita[$i]['nome'] ?? '') ?></td>
-        <td><?= htmlspecialchars($direita[$i]['setor'] ?? '') ?></td>
-      </tr>
-      <?php endfor; ?>
-    </tbody>
-  </table>
+  <div class="blocos">
+    <table>
+      <thead><tr><th>Ramal</th><th>Usuário</th><th>Núcleo</th></tr></thead>
+      <tbody>
+        <?php blocoImpressao($blocos[0]); ?>
+      </tbody>
+    </table>
+    <?php if (!empty($blocos[1])): ?>
+    <table>
+      <thead><tr><th>Ramal</th><th>Usuário</th><th>Núcleo</th></tr></thead>
+      <tbody>
+        <?php blocoImpressao($blocos[1]); ?>
+      </tbody>
+    </table>
+    <?php endif; ?>
+  </div>
   <script>window.print();</script>
 </body>
 </html>
