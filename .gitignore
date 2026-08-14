@@ -1,0 +1,6 @@
+# Dados cadastrados (nao deve ir pro git, cada VM tem os seus)
+data/ramais.json
+
+# Arquivos de sistema
+.DS_Store
+Thumbs.db
