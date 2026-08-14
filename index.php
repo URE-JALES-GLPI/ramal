@@ -507,6 +507,8 @@ sort($setoresExistentes, SORT_STRING | SORT_FLAG_CASE);
 (function () {
   var chave = 'setoresMinimizados';
   var minimizados = [];
+  var inputBusca = document.querySelector('.busca input');
+  var buscaAtiva = inputBusca ? inputBusca.value.trim() !== '' : false;
   try {
     minimizados = JSON.parse(localStorage.getItem(chave) || '[]');
   } catch (e) {}
@@ -526,7 +528,7 @@ sort($setoresExistentes, SORT_STRING | SORT_FLAG_CASE);
       corpo.style.maxHeight = min ? '0px' : corpo.scrollHeight + 'px';
     }
 
-    if (minimizados.indexOf(setor) !== -1) {
+    if (!buscaAtiva && minimizados.indexOf(setor) !== -1) {
       setMinimizado(true);
     } else {
       corpo.style.maxHeight = corpo.scrollHeight + 'px';
