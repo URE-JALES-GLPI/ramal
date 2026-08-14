@@ -320,6 +320,33 @@ sort($setoresExistentes, SORT_STRING | SORT_FLAG_CASE);
     font-weight: 600;
     white-space: nowrap;
   }
+  .setor-titulo .setor-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .setor-titulo .setor-left .nome-setor {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .setor-btn {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 0.9rem;
+    padding: 2px 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: transform .2s;
+    opacity: .8;
+  }
+  .setor-btn:hover { background: rgba(255,255,255,.2); opacity: 1; }
+  .setor-btn svg { display: block; }
+  .grupo.minimizado .setor-btn { transform: rotate(-90deg); }
+  .grupo .corpo { overflow: hidden; transition: max-height .25s ease; }
+  .grupo.minimizado .corpo { max-height: 0 !important; }
   .setor-titulo.sem-setor { background: linear-gradient(135deg, #9ca3af, #6b7280); }
   .grupo th {
     color: #6b7280;
@@ -416,11 +443,17 @@ sort($setoresExistentes, SORT_STRING | SORT_FLAG_CASE);
       <div class="vazio">Nenhum ramal cadastrado ainda.</div>
     <?php else: ?>
       <?php foreach ($grupos as $setor => $lista): ?>
-      <div class="grupo">
+      <div class="grupo" data-setor="<?= htmlspecialchars($setor) ?>">
         <h3 class="setor-titulo<?= $setor === 'Sem setor' ? ' sem-setor' : '' ?>">
-          <span><?= htmlspecialchars($setor) ?></span>
+          <span class="setor-left">
+            <button type="button" class="setor-btn" title="Minimizar/expandir setor" aria-expanded="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <span class="nome-setor"><?= htmlspecialchars($setor) ?></span>
+          </span>
           <span class="count"><?= count($lista) ?> <?= count($lista) === 1 ? 'ramal' : 'ramais' ?></span>
         </h3>
+        <div class="corpo">
         <table>
           <thead>
             <tr>
@@ -461,6 +494,7 @@ sort($setoresExistentes, SORT_STRING | SORT_FLAG_CASE);
             <?php endforeach; ?>
           </tbody>
         </table>
+        </div>
       </div>
       <?php endforeach; ?>
     <?php endif; ?>
@@ -468,6 +502,48 @@ sort($setoresExistentes, SORT_STRING | SORT_FLAG_CASE);
 
   <footer>Total de ramais: <?= count($ramais) ?></footer>
 </div>
+
+<script>
+(function () {
+  var chave = 'setoresMinimizados';
+  var minimizados = [];
+  try {
+    minimizados = JSON.parse(localStorage.getItem(chave) || '[]');
+  } catch (e) {}
+
+  function salvar() {
+    try { localStorage.setItem(chave, JSON.stringify(minimizados)); } catch (e) {}
+  }
+
+  document.querySelectorAll('.grupo').forEach(function (grupo) {
+    var setor = grupo.getAttribute('data-setor');
+    var corpo = grupo.querySelector('.corpo');
+    var btn = grupo.querySelector('.setor-btn');
+
+    function setMinimizado(min) {
+      grupo.classList.toggle('minimizado', min);
+      if (btn) btn.setAttribute('aria-expanded', min ? 'false' : 'true');
+      corpo.style.maxHeight = min ? '0px' : corpo.scrollHeight + 'px';
+    }
+
+    if (minimizados.indexOf(setor) !== -1) {
+      setMinimizado(true);
+    } else {
+      corpo.style.maxHeight = corpo.scrollHeight + 'px';
+    }
+
+    if (btn) btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var min = !grupo.classList.contains('minimizado');
+      setMinimizado(min);
+      var idx = minimizados.indexOf(setor);
+      if (min && idx === -1) minimizados.push(setor);
+      if (!min && idx !== -1) minimizados.splice(idx, 1);
+      salvar();
+    });
+  });
+})();
+</script>
 
 </body>
 </html>
