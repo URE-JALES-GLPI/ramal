@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Ramais
 
 Sitezinho simples para cadastrar RAMAL | NOME. PHP puro, sem banco de dados
@@ -39,3 +40,7 @@ do controle de versão — veja o `.gitignore`)
 - `index.php` — todo o site (lista, cadastro, edição, exclusão, busca)
 - `data/ramais.json` — onde os ramais cadastrados ficam salvos (ignorado pelo git)
 - `data/.htaccess` — bloqueia acesso direto ao json pelo navegador
+=======
+# ramal
+Controle de ramais para URE
+>>>>>>> c1bd74c5f1d457b40294c325ffc738045a4ab669
