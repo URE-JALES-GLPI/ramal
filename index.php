@@ -4,6 +4,9 @@
  * Armazena tudo em data/ramais.json (nao precisa de banco de dados)
  */
 
+session_start();
+$logado = isset($_SESSION['logado']) && $_SESSION['logado'] === true;
+
 $dataFile = __DIR__ . '/data/ramais.json';
 
 // garante que a pasta/arquivo de dados existe
@@ -29,6 +32,11 @@ $erro = '';
 $sucesso = '';
 
 // ---------- AÇÕES (POST) ----------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$logado) {
+    header('Location: login.php');
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $acao = $_POST['acao'] ?? '';
 
@@ -149,6 +157,15 @@ usort($ramais, fn($a, $b) => strnatcmp($a['ramal'], $b['ramal']));
     color: #6b7280;
     margin-top: 4px;
   }
+  header .sessao {
+    display: inline-block;
+    margin-top: 10px;
+    font-size: 0.85rem;
+    color: var(--azul);
+    text-decoration: none;
+    font-weight: 600;
+  }
+  header .sessao:hover { text-decoration: underline; }
   .container {
     max-width: 720px;
     margin: 0 auto;
@@ -227,6 +244,9 @@ usort($ramais, fn($a, $b) => strnatcmp($a['ramal'], $b['ramal']));
   .acoes .excluir { background: #fee2e2; color: var(--vermelho); border: none; }
   .acoes .excluir:hover { background: #fecaca; }
   .vazio { text-align: center; color: #9ca3af; padding: 24px 0; }
+  .aviso-login { text-align: center; color: #6b7280; font-size: 0.9rem; }
+  .aviso-login a { color: var(--azul); font-weight: 600; text-decoration: none; }
+  .aviso-login a:hover { text-decoration: underline; }
   footer { text-align: center; color: #9ca3af; font-size: 0.8rem; margin-top: 24px; }
 </style>
 </head>
@@ -235,6 +255,11 @@ usort($ramais, fn($a, $b) => strnatcmp($a['ramal'], $b['ramal']));
 <header>
   <h1>📞 Ramais</h1>
   <p>Cadastro de ramais e responsáveis</p>
+  <?php if ($logado): ?>
+    <a class="sessao" href="logout.php">Sair</a>
+  <?php else: ?>
+    <a class="sessao" href="login.php">Entrar para cadastrar</a>
+  <?php endif; ?>
 </header>
 
 <div class="container">
@@ -246,6 +271,7 @@ usort($ramais, fn($a, $b) => strnatcmp($a['ramal'], $b['ramal']));
     <div class="msg msg-sucesso"><?= htmlspecialchars($sucesso) ?></div>
   <?php endif; ?>
 
+  <?php if ($logado): ?>
   <div class="card">
     <form class="cadastro" method="post">
       <input type="hidden" name="acao" value="salvar">
@@ -266,6 +292,11 @@ usort($ramais, fn($a, $b) => strnatcmp($a['ramal'], $b['ramal']));
       <?php endif; ?>
     </form>
   </div>
+  <?php else: ?>
+  <div class="card aviso-login">
+    <p>Você está vendo a lista de ramais. Para cadastrar, editar ou excluir, <a href="login.php">faça login</a>.</p>
+  </div>
+  <?php endif; ?>
 
   <div class="card">
     <form class="busca" method="get">
@@ -282,7 +313,7 @@ usort($ramais, fn($a, $b) => strnatcmp($a['ramal'], $b['ramal']));
           <tr>
             <th>Ramal</th>
             <th>Nome</th>
-            <th></th>
+            <?php if ($logado): ?><th></th><?php endif; ?>
           </tr>
         </thead>
         <tbody>
@@ -290,6 +321,7 @@ usort($ramais, fn($a, $b) => strnatcmp($a['ramal'], $b['ramal']));
             <tr>
               <td class="ramal-col"><?= htmlspecialchars($r['ramal']) ?></td>
               <td><?= htmlspecialchars($r['nome']) ?></td>
+              <?php if ($logado): ?>
               <td class="acoes">
                 <a class="editar" href="?editar=<?= urlencode($r['id']) ?>">Editar</a>
                 <form method="post" onsubmit="return confirm('Excluir o ramal <?= htmlspecialchars($r['ramal']) ?>?');" style="display:inline">
@@ -298,6 +330,7 @@ usort($ramais, fn($a, $b) => strnatcmp($a['ramal'], $b['ramal']));
                   <button type="submit" class="excluir">Excluir</button>
                 </form>
               </td>
+              <?php endif; ?>
             </tr>
           <?php endforeach; ?>
         </tbody>

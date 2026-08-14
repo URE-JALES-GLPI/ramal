@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Ramais
 
 Sitezinho simples para cadastrar RAMAL | NOME. PHP puro, sem banco de dados
@@ -25,6 +24,27 @@ sudo chmod -R 775 /var/www/html/ramal/data
 
 Acesse: `http://IP_DA_VM/ramal`
 
+## Habilitar os arquivos .htaccess (importante)
+
+O projeto usa `.htaccess` para bloquear o acesso direto ao `config.php` (login/senha)
+e ao `data/ramais.json`. Para isso funcionar, o Apache precisa permitir
+`AllowOverride`. Rode:
+
+```bash
+sudo a2enmod rewrite
+sudo sed -i 's/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf
+sudo systemctl restart apache2
+```
+
+## Login
+
+- Usuário: `admin`
+- Senha: `jales.123`
+
+Qualquer pessoa pode **ver** a lista de ramais. Só quem fizer login consegue
+**cadastrar, editar ou excluir**. As credenciais ficam no arquivo `config.php`
+(pode trocar lá quando quiser).
+
 ## Atualizar depois de mudanças no código
 
 ```bash
@@ -37,10 +57,9 @@ do controle de versão — veja o `.gitignore`)
 
 ## Estrutura
 
-- `index.php` — todo o site (lista, cadastro, edição, exclusão, busca)
+- `index.php` — lista, cadastro, edição, exclusão, busca (cadastro/edição/exclusão exigem login)
+- `login.php` / `logout.php` — tela de login e logout
+- `config.php` — usuário e senha do login
+- `.htaccess` — bloqueia acesso direto ao config.php
 - `data/ramais.json` — onde os ramais cadastrados ficam salvos (ignorado pelo git)
 - `data/.htaccess` — bloqueia acesso direto ao json pelo navegador
-=======
-# ramal
-Controle de ramais para URE
->>>>>>> c1bd74c5f1d457b40294c325ffc738045a4ab669
