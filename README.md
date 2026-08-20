@@ -39,10 +39,9 @@ sudo systemctl restart apache2
 ## Login
 
 - Usuário: `admin`
-- Senha: `jales.123`
 
 Qualquer pessoa pode **ver** a lista de ramais. Só quem fizer login consegue
-**cadastrar, editar ou excluir**. As credenciais ficam no arquivo `config.php`
+**cadastrar, editar ou excluir**. A senha fica no arquivo `config.php`
 (pode trocar lá quando quiser).
 
 ## Atualizar depois de mudanças no código
@@ -63,3 +62,7 @@ do controle de versão — veja o `.gitignore`)
 - `.htaccess` — bloqueia acesso direto ao config.php
 - `data/ramais.json` — onde os ramais cadastrados ficam salvos (ignorado pelo git)
 - `data/.htaccess` — bloqueia acesso direto ao json pelo navegador
+
+## Autor
+
+Desenvolvido por **Leonardo Poiatti Fação**.
