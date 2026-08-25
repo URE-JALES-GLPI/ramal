@@ -18,6 +18,46 @@ if (!function_exists('mb_strtolower')) {
         return strtolower($string);
     }
 }
+if (!function_exists('mb_strpos')) {
+    function mb_strpos($haystack, $needle, $offset = 0) {
+        return strpos($haystack, $needle, $offset);
+    }
+}
+if (!function_exists('mb_strlen')) {
+    function mb_strlen($string) {
+        return strlen($string);
+    }
+}
+if (!function_exists('mb_substr')) {
+    function mb_substr($string, $start, $length = null) {
+        if ($length === null) return substr($string, $start);
+        return substr($string, $start, $length);
+    }
+}
+
+function normalizarBusca($str) {
+    $str = mb_strtolower((string)$str, 'UTF-8');
+    $map = [
+        'á'=>'a','à'=>'a','ã'=>'a','â'=>'a','ä'=>'a',
+        'é'=>'e','è'=>'e','ê'=>'e','ë'=>'e',
+        'í'=>'i','ì'=>'i','î'=>'i','ï'=>'i',
+        'ó'=>'o','ò'=>'o','õ'=>'o','ô'=>'o','ö'=>'o',
+        'ú'=>'u','ù'=>'u','û'=>'u','ü'=>'u',
+        'ç'=>'c','ñ'=>'n',
+    ];
+    $str = strtr($str, $map);
+    // fallback para outros acentos via iconv/Normalizer se disponivel (preserva tamanho aprox)
+    if (class_exists('Normalizer')) {
+        $norm = Normalizer::normalize($str, Normalizer::FORM_D);
+        if ($norm !== false) {
+            $str = preg_replace('/\p{Mn}/u', '', $norm);
+        }
+    } elseif (function_exists('iconv')) {
+        $iconv = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $str);
+        if ($iconv !== false) $str = $iconv;
+    }
+    return $str;
+}
 
 $dataFile = __DIR__ . '/data/ramais.json';
 
@@ -45,12 +85,31 @@ function salvarRamais($dataFile, $dados) {
 }
 
 function destacar($texto, $termo) {
-    $texto = htmlspecialchars((string)$texto);
+    $texto = (string)$texto;
     $termo = trim((string)$termo);
-    if ($termo === '') return $texto;
-    $esc = htmlspecialchars($termo);
-    $r = @preg_replace('/(' . preg_quote($esc, '/') . ')/iu', '<mark>$1</mark>', $texto);
-    return is_string($r) ? $r : $texto;
+    if ($termo === '') return htmlspecialchars($texto);
+    $textoNorm = normalizarBusca($texto);
+    $termoNorm = normalizarBusca($termo);
+    if ($termoNorm === '') return htmlspecialchars($texto);
+    $resultado = '';
+    $offset = 0;
+    $lenTermo = mb_strlen($termoNorm, 'UTF-8');
+    // Como normalizarBusca preserva tamanho para PT-BR via strtr, índices batem.
+    // Se Normalizer/iconv mudar tamanho, fallback para busca simples
+    if (mb_strlen($textoNorm, 'UTF-8') !== mb_strlen($texto, 'UTF-8')) {
+        // fallback: highlight literal (case-insensitive) sem normalização de tamanho
+        $esc = preg_quote($termo, '/');
+        $r = @preg_replace('/(' . $esc . ')/iu', '<mark>$1</mark>', htmlspecialchars($texto));
+        return is_string($r) ? $r : htmlspecialchars($texto);
+    }
+    while (($pos = mb_strpos($textoNorm, $termoNorm, $offset, 'UTF-8')) !== false) {
+        $resultado .= htmlspecialchars(mb_substr($texto, $offset, $pos - $offset, 'UTF-8'));
+        $matchOrig = mb_substr($texto, $pos, $lenTermo, 'UTF-8');
+        $resultado .= '<mark>' . htmlspecialchars($matchOrig) . '</mark>';
+        $offset = $pos + $lenTermo;
+    }
+    $resultado .= htmlspecialchars(mb_substr($texto, $offset, null, 'UTF-8'));
+    return $resultado;
 }
 
 function zip_armazenar($arquivos) {
@@ -257,16 +316,18 @@ if (isset($_GET['editar'])) {
 
 // ---------- BUSCA ----------
 $busca = trim($_GET['busca'] ?? '');
-if ($busca !== '') {
-    $buscaLower = mb_strtolower($busca);
-    $ramais = array_filter($ramais, function ($r) use ($buscaLower) {
-        return str_contains(mb_strtolower($r['ramal']), $buscaLower)
-            || str_contains(mb_strtolower($r['nome']), $buscaLower)
-            || str_contains(mb_strtolower($r['setor'] ?? ''), $buscaLower)
-            || str_contains(mb_strtolower($r['cargo'] ?? ''), $buscaLower)
-            || str_contains(mb_strtolower($r['email'] ?? ''), $buscaLower);
-    });
+$buscaNorm = $busca !== '' ? normalizarBusca($busca) : '';
 
+$matchesBusca = function($r) use ($buscaNorm) {
+    if ($buscaNorm === '') return true;
+    return str_contains(normalizarBusca($r['ramal'] ?? ''), $buscaNorm)
+        || str_contains(normalizarBusca($r['nome'] ?? ''), $buscaNorm)
+        || str_contains(normalizarBusca($r['setor'] ?? ''), $buscaNorm)
+        || str_contains(normalizarBusca($r['cargo'] ?? ''), $buscaNorm)
+        || str_contains(normalizarBusca($r['email'] ?? ''), $buscaNorm);
+};
+
+if ($busca !== '') {
     // registra a pesquisa feita (para o admin ver depois)
     if (!$logado) {
         $buscas = json_decode((string)@file_get_contents($buscasFile), true);
@@ -282,7 +343,12 @@ if ($busca !== '') {
     }
 }
 
-// ordena por setor e depois por ramal
+// para footer/contagem: lista filtrada (visivel inicialmente)
+$ramaisFiltrados = $buscaNorm !== '' ? array_filter($ramais, $matchesBusca) : $ramais;
+$totalFiltrado = count($ramaisFiltrados);
+$totalGeral = count($ramais);
+
+// ordena por setor e depois por ramal (mantém lista completa para busca ao vivo)
 usort($ramais, function ($a, $b) {
     $sa = mb_strtolower($a['setor'] ?? '');
     $sb = mb_strtolower($b['setor'] ?? '');
@@ -290,7 +356,7 @@ usort($ramais, function ($a, $b) {
     return strnatcmp($a['ramal'], $b['ramal']);
 });
 
-// agrupa por setor para exibicao
+// agrupa por setor para exibicao (sempre lista completa, filtragem é via CSS/JS para permitir busca ao vivo)
 $grupos = [];
 foreach ($ramais as $r) {
     $setor = trim($r['setor'] ?? '');
@@ -738,11 +804,11 @@ if ($logado) {
   </div>
   <?php endif; ?>
 
-  <div class="card">
-    <form class="busca" method="get">
-      <input type="text" name="busca" placeholder="🔍 Buscar por ramal, nome, cargo, setor ou e-mail..."
+  <div class="card" id="cardLista">
+    <form class="busca" method="get" id="formBusca">
+      <input type="search" id="campoBusca" name="busca" placeholder="🔍 Buscar por ramal, nome, cargo, setor ou e-mail..."
              value="<?= htmlspecialchars($busca) ?>"
-             onchange="this.form.submit()">
+             autocomplete="off" spellcheck="false" enterkeyhint="search">
     </form>
 
     <div class="barra">
@@ -760,7 +826,13 @@ if ($logado) {
       <div class="vazio">Nenhum ramal cadastrado ainda.</div>
     <?php else: ?>
       <?php foreach ($grupos as $setor => $lista): ?>
-      <div class="grupo" data-setor="<?= htmlspecialchars($setor) ?>">
+      <?php
+        $visiveisNoGrupo = 0;
+        foreach ($lista as $r) if ($matchesBusca($r)) $visiveisNoGrupo++;
+        $grupoOculto = ($buscaNorm !== '' && $visiveisNoGrupo === 0);
+        $totalNoGrupo = count($lista);
+      ?>
+      <div class="grupo" data-setor="<?= htmlspecialchars($setor) ?>" data-total="<?= $totalNoGrupo ?>" data-visiveis="<?= $visiveisNoGrupo ?>" <?= $grupoOculto ? 'style="display:none"' : '' ?>>
         <h3 class="setor-titulo<?= $setor === 'Sem setor' ? ' sem-setor' : '' ?>">
           <span class="setor-left">
             <button type="button" class="setor-btn" title="Minimizar/expandir setor" aria-expanded="true">
@@ -768,7 +840,7 @@ if ($logado) {
             </button>
             <span class="nome-setor"><?= destacar($setor, $busca) ?></span>
           </span>
-          <span class="count"><?= count($lista) ?> <?= count($lista) === 1 ? 'ramal' : 'ramais' ?></span>
+          <span class="count" data-orig="<?= $totalNoGrupo ?>"><?= $buscaNorm !== '' ? $visiveisNoGrupo . ' / ' . $totalNoGrupo . ' ' . ($totalNoGrupo === 1 ? 'ramal' : 'ramais') : $totalNoGrupo . ' ' . ($totalNoGrupo === 1 ? 'ramal' : 'ramais') ?></span>
         </h3>
         <div class="corpo">
         <table>
@@ -782,7 +854,8 @@ if ($logado) {
           </thead>
           <tbody>
             <?php foreach ($lista as $r): ?>
-              <tr>
+              <?php $visivelLinha = $matchesBusca($r); ?>
+              <tr <?= !$visivelLinha ? 'style="display:none"' : '' ?>>
                 <td class="ramal-col"><?= destacar($r['ramal'], $busca) ?></td>
                 <td>
                   <div class="nome"><?= destacar($r['nome'], $busca) ?></div>
@@ -814,28 +887,30 @@ if ($logado) {
         </div>
       </div>
       <?php endforeach; ?>
+      <div id="semResultado" class="vazio" style="display:<?= ($buscaNorm !== '' && $totalFiltrado === 0) ? 'block' : 'none' ?>">Nenhum ramal encontrado para "<span id="termoSemResultado"><?= htmlspecialchars($busca) ?></span>".</div>
     <?php endif; ?>
   </div>
 
-  <footer>Total de ramais: <?= count($ramais) ?></footer>
+  <footer id="footerTotal" data-total-geral="<?= $totalGeral ?>" data-total-filtrado="<?= $totalFiltrado ?>">Total de ramais: <span id="footerCount"><?= $buscaNorm !== '' ? $totalFiltrado : $totalGeral ?></span><?= $buscaNorm !== '' ? ' <span id="footerDetalhe">(filtrados de ' . $totalGeral . ')</span>' : '<span id="footerDetalhe" style="display:none"></span>' ?></footer>
 </div>
 
 <script>
 (function () {
   var chave = 'setoresMinimizados';
   var minimizados = [];
-  var inputBusca = document.querySelector('.busca input');
-  var buscaAtiva = inputBusca ? inputBusca.value.trim() !== '' : false;
-  try {
-    minimizados = JSON.parse(localStorage.getItem(chave) || '[]');
-  } catch (e) {}
-
+  try { minimizados = JSON.parse(localStorage.getItem(chave) || '[]'); } catch (e) {}
   var grupos = Array.prototype.slice.call(document.querySelectorAll('.grupo'));
+  var campoBusca = document.getElementById('campoBusca');
+  var formBusca = document.getElementById('formBusca');
+  var semResultado = document.getElementById('semResultado');
+  var termoSpan = document.getElementById('termoSemResultado');
+  var footerTotal = document.getElementById('footerTotal');
+  var footerCount = document.getElementById('footerCount');
+  var footerDetalhe = document.getElementById('footerDetalhe');
 
   function salvar() {
     try { localStorage.setItem(chave, JSON.stringify(minimizados)); } catch (e) {}
   }
-
   function aplicar(grupo, min) {
     var corpo = grupo.querySelector('.corpo');
     var btn = grupo.querySelector('.setor-btn');
@@ -844,16 +919,18 @@ if ($logado) {
     if (corpo) corpo.style.maxHeight = min ? '0px' : corpo.scrollHeight + 'px';
   }
 
+  var buscaInicialAtiva = campoBusca && campoBusca.value.trim() !== '';
+
   grupos.forEach(function (grupo) {
     var setor = grupo.getAttribute('data-setor');
     var btn = grupo.querySelector('.setor-btn');
-
-    if (!buscaAtiva && minimizados.indexOf(setor) !== -1) {
+    if (!buscaInicialAtiva && minimizados.indexOf(setor) !== -1) {
       aplicar(grupo, true);
-    } else {
+    } else if (!buscaInicialAtiva) {
       aplicar(grupo, false);
+    } else {
+      if (grupo.style.display !== 'none') aplicar(grupo, false);
     }
-
     if (btn) btn.addEventListener('click', function (e) {
       e.stopPropagation();
       var min = !grupo.classList.contains('minimizado');
@@ -877,6 +954,145 @@ if ($logado) {
     salvar();
     grupos.forEach(function (g) { aplicar(g, false); });
   });
+
+  // ---------- busca ao vivo (sem diferenciar acentos) ----------
+  if (!campoBusca) return;
+
+  function normalizarJS(s) { return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+  function escapeHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+  function highlightText(original, termoNorm) {
+    if (!termoNorm) return escapeHtml(original);
+    var normOrig = normalizarJS(original);
+    var len = termoNorm.length;
+    if (normOrig.length !== original.length) {
+      // fallback brute-force para casos onde length diverge (ex: caracteres especiais)
+      // percorre original construindo mapa
+      var res = '';
+      var last = 0;
+      // cria índice mapeado: para cada char original, seu normalizado (pode ser 0-2 chars)
+      // simplificação: busca com includes sem destaque se divergir
+      // mas para PT-BR length geralmente preserva, então apenas retorna escape se divergir
+      return escapeHtml(original);
+    }
+    var res = '';
+    var last = 0;
+    var idx = normOrig.indexOf(termoNorm);
+    while (idx !== -1) {
+      res += escapeHtml(original.slice(last, idx));
+      res += '<mark>' + escapeHtml(original.slice(idx, idx + len)) + '</mark>';
+      last = idx + len;
+      idx = normOrig.indexOf(termoNorm, last);
+    }
+    res += escapeHtml(original.slice(last));
+    return res;
+  }
+
+  var highlightEls = Array.prototype.slice.call(document.querySelectorAll('.ramal-col, .nome, .cargo, .email, .nome-setor'));
+  highlightEls.forEach(function (el) {
+    if (el.dataset.orig === undefined) el.dataset.orig = el.textContent;
+  });
+
+  function filtrar() {
+    var termoRaw = campoBusca.value.trim();
+    var termoNorm = normalizarJS(termoRaw);
+    var temTermo = termoNorm !== '';
+    var totalVisivel = 0;
+
+    grupos.forEach(function (grupo) {
+      var setorNome = grupo.getAttribute('data-setor') || '';
+      var setorNorm = normalizarJS(setorNome);
+      var linhas = Array.prototype.slice.call(grupo.querySelectorAll('tbody tr'));
+      var totalNoGrupo = parseInt(grupo.getAttribute('data-total') || linhas.length, 10);
+      var visiveisNoGrupo = 0;
+      var setorMatch = temTermo && setorNorm.indexOf(termoNorm) !== -1;
+
+      linhas.forEach(function (tr) {
+        if (!temTermo) {
+          tr.style.display = '';
+          visiveisNoGrupo++;
+          return;
+        }
+        var textoLinha = normalizarJS(tr.textContent || '');
+        var match = setorMatch || textoLinha.indexOf(termoNorm) !== -1;
+        tr.style.display = match ? '' : 'none';
+        if (match) visiveisNoGrupo++;
+      });
+
+      var countEl = grupo.querySelector('.count');
+      if (temTermo) {
+        if (visiveisNoGrupo === 0) {
+          grupo.style.display = 'none';
+        } else {
+          grupo.style.display = '';
+          totalVisivel += visiveisNoGrupo;
+          aplicar(grupo, false);
+        }
+        if (countEl) countEl.textContent = visiveisNoGrupo + ' / ' + totalNoGrupo + ' ' + (totalNoGrupo === 1 ? 'ramal' : 'ramais');
+      } else {
+        grupo.style.display = '';
+        totalVisivel += totalNoGrupo;
+        var setor = grupo.getAttribute('data-setor');
+        var deveriaMinimizar = minimizados.indexOf(setor) !== -1;
+        aplicar(grupo, deveriaMinimizar);
+        if (countEl) countEl.textContent = totalNoGrupo + ' ' + (totalNoGrupo === 1 ? 'ramal' : 'ramais');
+      }
+    });
+
+    highlightEls.forEach(function (el) {
+      var orig = el.dataset.orig || '';
+      if (!temTermo) {
+        if (el.innerHTML.indexOf('<mark>') !== -1 || el.textContent !== orig) el.textContent = orig;
+      } else {
+        el.innerHTML = highlightText(orig, termoNorm);
+      }
+    });
+
+    if (semResultado) {
+      if (temTermo && totalVisivel === 0) {
+        semResultado.style.display = '';
+        if (termoSpan) termoSpan.textContent = termoRaw;
+      } else {
+        semResultado.style.display = 'none';
+      }
+    }
+
+    var totalGeral = footerTotal ? parseInt(footerTotal.getAttribute('data-total-geral') || '0', 10) : grupos.reduce(function (a, g) { return a + parseInt(g.getAttribute('data-total') || '0', 10); }, 0);
+    if (footerCount) footerCount.textContent = temTermo ? totalVisivel : totalGeral;
+    if (footerDetalhe) {
+      if (temTermo) {
+        footerDetalhe.style.display = '';
+        footerDetalhe.textContent = '(filtrados de ' + totalGeral + ')';
+      } else {
+        footerDetalhe.style.display = 'none';
+      }
+    }
+
+    try {
+      var url = new URL(window.location.href);
+      if (temTermo) url.searchParams.set('busca', termoRaw);
+      else url.searchParams.delete('busca');
+      window.history.replaceState(null, '', url.toString());
+    } catch (e) {}
+
+    if (temTermo) {
+      grupos.forEach(function (g) {
+        if (g.style.display !== 'none' && !g.classList.contains('minimizado')) {
+          var corpo = g.querySelector('.corpo');
+          if (corpo) corpo.style.maxHeight = corpo.scrollHeight + 'px';
+        }
+      });
+    }
+  }
+
+  var debounceTimer = null;
+  campoBusca.addEventListener('input', function () {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(filtrar, 30);
+  });
+  campoBusca.addEventListener('search', filtrar);
+  if (formBusca) formBusca.addEventListener('submit', function (e) { e.preventDefault(); filtrar(); });
+
+  if (buscaInicialAtiva) filtrar();
 })();
 </script>
 
