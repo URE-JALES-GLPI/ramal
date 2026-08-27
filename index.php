@@ -4,8 +4,13 @@
  * Armazena tudo em data/ramais.json (nao precisa de banco de dados)
  */
 
-session_start();
-$logado = isset($_SESSION['logado']) && $_SESSION['logado'] === true;
+require_once __DIR__ . '/auth.php';
+iniciarSessaoSeNecessario();
+garantirUsuarios();
+$logado = estaLogado();
+$usuarioLogado = usuarioLogado();
+$perfilLogado = perfilLogado();
+$isAdmin = ehAdmin();
 
 // compatibilidade: funciona mesmo sem a extensao mbstring ou em PHP < 8
 if (!function_exists('str_contains')) {
@@ -721,7 +726,12 @@ if ($logado) {
   <h1><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28" style="vertical-align:-6px;margin-right:6px" aria-hidden="true"><path fill="#dc2626" d="M6.62 10.79a15.15 15.15 0 006.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg> Ramais</h1>
   <p>Cadastro de ramais e responsáveis</p>
   <?php if ($logado): ?>
-    <a class="sessao" href="logout.php">Sair</a>
+    <div style="margin-top:10px;font-size:.85rem;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;align-items:center">
+      <span style="color:#6b7280">Olá, <strong><?= htmlspecialchars($usuarioLogado) ?></strong> <span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:999px;font-size:.7rem;font-weight:700;margin-left:4px"><?= $isAdmin ? 'ADMIN' : 'EDITOR' ?></span></span>
+      <a class="sessao" href="usuarios.php" style="margin-top:0"><?= $isAdmin ? 'Gerenciar usuários' : 'Minha conta' ?></a>
+      <span style="color:#d1d5db">|</span>
+      <a class="sessao" href="logout.php" style="margin-top:0">Sair</a>
+    </div>
   <?php else: ?>
     <a class="sessao" href="login.php">Entrar para cadastrar</a>
   <?php endif; ?>

@@ -1,9 +1,10 @@
 <?php
 /**
- * Configuração de acesso.
- * Troque o usuário e a senha aqui se quiser.
+ * Configuração de acesso (legado).
+ * O sistema agora usa data/usuarios.json com senhas em hash.
+ * Mantido para compatibilidade/migração inicial.
  */
 return [
     'usuario' => 'admin',
-    'senha'   => 'jales.123',
+    'senha'   => 'Ramais@Jales#2026',
 ];

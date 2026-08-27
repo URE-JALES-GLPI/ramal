@@ -1,5 +1,7 @@
 # Dados cadastrados (nao deve ir pro git, cada VM tem os seus)
 data/ramais.json
+data/usuarios.json
+data/buscas.json
 
 # Arquivos de sistema
 .DS_Store

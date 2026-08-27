@@ -1,3 +1,9 @@
 <Files "config.php">
     Require all denied
 </Files>
+<Files "auth.php">
+    Require all denied
+</Files>
+<Files "usuarios.json">
+    Require all denied
+</Files>

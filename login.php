@@ -1,15 +1,62 @@
 <?php
-session_start();
-$config = require __DIR__ . '/config.php';
+require_once __DIR__ . '/auth.php';
+iniciarSessaoSeNecessario();
+garantirUsuarios();
 
 $erro = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $usuario = trim($_POST['usuario'] ?? '');
-    $senha   = trim($_POST['senha'] ?? '');
+    $senha   = (string)($_POST['senha'] ?? '');
 
-    if ($usuario === $config['usuario'] && $senha === $config['senha']) {
+    $usuarios = carregarUsuarios();
+    $encontrado = null;
+    foreach ($usuarios as $u) {
+        if (strcasecmp($u['usuario'] ?? '', $usuario) === 0) {
+            $encontrado = $u;
+            break;
+        }
+    }
+
+    $ok = false;
+    if ($encontrado && !empty($encontrado['senha_hash']) && password_verify($senha, $encontrado['senha_hash'])) {
+        // rehash se necessário
+        if (password_needs_rehash($encontrado['senha_hash'], PASSWORD_DEFAULT)) {
+            foreach ($usuarios as &$u) {
+                if (($u['id'] ?? '') === $encontrado['id']) {
+                    $u['senha_hash'] = password_hash($senha, PASSWORD_DEFAULT);
+                    break;
+                }
+            }
+            unset($u);
+            salvarUsuarios($usuarios);
+            $encontrado['senha_hash'] = password_hash($senha, PASSWORD_DEFAULT);
+        }
+        $ok = true;
+    } else {
+        // fallback legado: config.php (para migração de instalações antigas sem usuarios.json correto)
+        $config = @include __DIR__ . '/config.php';
+        if (is_array($config) && $usuario === ($config['usuario'] ?? '') && $senha === ($config['senha'] ?? '')) {
+            // garante que o usuário exista em usuarios.json
+            if (!$encontrado) {
+                $usuarios[] = [
+                    'id' => uniqid('u_', true),
+                    'usuario' => $config['usuario'],
+                    'senha_hash' => password_hash($senha, PASSWORD_DEFAULT),
+                    'perfil' => 'admin',
+                ];
+                salvarUsuarios($usuarios);
+                $encontrado = end($usuarios);
+            }
+            $ok = true;
+        }
+    }
+
+    if ($ok && $encontrado) {
         $_SESSION['logado'] = true;
+        $_SESSION['usuario'] = $encontrado['usuario'];
+        $_SESSION['perfil'] = $encontrado['perfil'] ?? 'editor';
+        $_SESSION['usuario_id'] = $encontrado['id'] ?? null;
         header('Location: index.php');
         exit;
     } else {
