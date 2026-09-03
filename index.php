@@ -818,6 +818,22 @@ if ($logado) {
   <?php endif; ?>
 
   <div class="card" id="cardLista">
+    <style>
+      .ramal-filter-toggle{margin-bottom:12px;display:flex;align-items:center;gap:8px}
+      .ramal-filter-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#fff;border:1.5px solid #e5e7eb;border-radius:8px;font-size:.85rem;font-weight:700;color:#374151;cursor:pointer;transition:all .15s}
+      .ramal-filter-btn:hover{background:#f3f4f6;border-color:#d1d5db}
+      .ramal-filter-btn.active{background:#dbeafe;border-color:#93c5fd;color:#1e40af}
+      .ramal-filter-content.collapsed{display:none}
+      .ramal-filter-content.expanded{display:block}
+    </style>
+    <div class="ramal-filter-toggle">
+      <button type="button" id="ramal-filter-btn" class="ramal-filter-btn" onclick="toggleRamalFilter()">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+        Filtros <span id="ramal-filter-text">Expandir</span> <svg id="ramal-filter-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <?php if($busca !== '') echo "<small class='text-muted' style='color:#6b7280;font-size:.8rem'><i>Filtrando: \"".htmlspecialchars(mb_strimwidth($busca,0,24,'…'))."\"</i></small>"; ?>
+    </div>
+    <div id="ramal-filter-content" class="ramal-filter-content collapsed" style="display:none">
     <form class="busca" method="get" id="formBusca">
       <input type="search" id="campoBusca" name="busca" placeholder="🔍 Buscar por ramal, nome, cargo, setor ou e-mail..."
              value="<?= htmlspecialchars($busca) ?>"
@@ -834,6 +850,27 @@ if ($logado) {
         <a class="btn-sec" href="?imprimir=1" target="_blank">Imprimir / PDF</a>
       </div>
     </div>
+    </div>
+    <script>
+    function toggleRamalFilter(){
+      var c=document.getElementById('ramal-filter-content');
+      var b=document.getElementById('ramal-filter-btn');
+      var t=document.getElementById('ramal-filter-text');
+      var i=document.getElementById('ramal-filter-icon');
+      if(c.style.display==='none' || c.classList.contains('collapsed')){
+        c.style.display='block'; c.classList.remove('collapsed'); c.classList.add('expanded');
+        b.classList.add('active');
+        if(t) t.textContent='Recolher';
+        if(i) i.style.transform='rotate(180deg)';
+        setTimeout(function(){ var el=document.getElementById('campoBusca'); if(el) el.focus(); },100);
+      } else {
+        c.style.display='none'; c.classList.add('collapsed'); c.classList.remove('expanded');
+        b.classList.remove('active');
+        if(t) t.textContent='Expandir';
+        if(i) i.style.transform='rotate(0deg)';
+      }
+    }
+    </script>
 
     <?php if (empty($ramais)): ?>
       <div class="vazio">Nenhum ramal cadastrado ainda.</div>
