@@ -6,3 +6,7 @@ data/buscas.json
 # Arquivos de sistema
 .DS_Store
 Thumbs.db
+
+# Senha local e senha inicial gerada (nunca versionar)
+config.local.php
+data/senha-inicial.php

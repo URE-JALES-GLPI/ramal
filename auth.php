@@ -43,17 +43,6 @@ function garantirUsuarios() {
             if (!isset($u['perfil'])) { $u['perfil'] = ($u['usuario'] === 'admin' ? 'admin' : 'editor'); $alterado = true; }
         }
         unset($u);
-        // migração: se admin ainda está com senha antiga jales.123, atualiza para Ramais@Jales#2026
-        foreach ($usuarios as &$u) {
-            if (($u['usuario'] ?? '') === 'admin' && !empty($u['senha_hash'])) {
-                if (password_verify('jales.123', $u['senha_hash']) && !password_verify('Ramais@Jales#2026', $u['senha_hash'])) {
-                    $u['senha_hash'] = password_hash('Ramais@Jales#2026', PASSWORD_DEFAULT);
-                    $alterado = true;
-                }
-                break;
-            }
-        }
-        unset($u);
         if ($alterado) salvarUsuarios($usuarios);
         return $usuarios;
     }
@@ -69,7 +58,17 @@ function garantirUsuarios() {
     }
 
     $usuarioAdmin = $config['usuario'] ?? 'admin';
-    $senhaAdmin   = $config['senha']   ?? 'Ramais@Jales#2026';
+    $senhaAdmin   = $config['senha']   ?? null;
+
+    // sem senha configurada: gera uma aleatória e grava num .php que não imprime nada pela web
+    if (empty($senhaAdmin)) {
+        $senhaAdmin = bin2hex(random_bytes(8));
+        $dir = dirname($file);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0775, true);
+        }
+        file_put_contents($dir . '/senha-inicial.php', "<?php /* Senha inicial do usuario {$usuarioAdmin}: {$senhaAdmin}\n   Troque a senha em Usuarios depois de entrar e apague este arquivo. */\n");
+    }
 
     $usuarios = [[
         'id' => uniqid('u_', true),

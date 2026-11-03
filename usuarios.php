@@ -401,7 +401,7 @@ usort($usuarios, function($a,$b){
         <?php endforeach; ?>
       </tbody>
     </table>
-    <p class="hint">Dica: o usuário <strong>admin</strong> inicial já está com a senha <code>Ramais@Jales#2026</code>. Altere se desejar e crie usuários “Editor” para quem vai apenas gerenciar ramais.</p>
+    <p class="hint">Dica: troque a senha inicial do <strong>admin</strong> e crie usuários “Editor” para quem vai apenas gerenciar ramais.</p>
   </div>
   <?php else: ?>
   <div class="card">
