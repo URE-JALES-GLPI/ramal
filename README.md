@@ -11,7 +11,7 @@ A consulta é aberta a todos; o gerenciamento é restrito a usuários autenticad
 ## Para que serve
 
 - **Encontrar contatos em segundos** — Busca inteligente por ramal, nome, setor, cargo ou e-mail.
-- **Manter o diretório organizado** — Cadastro, edição e exclusão com validação de duplicidade.
+- **Manter o diretório organizado** — Cadastro, edição e exclusão; o mesmo ramal pode ser de várias pessoas.
 - **Exportar e imprimir** — Geração de planilha XLSX e versão para impressão/PDF.
 - **Gerenciar acesso** — Perfis Admin e Editor com controle de permissões e troca de senha.
 

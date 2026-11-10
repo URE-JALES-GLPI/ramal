@@ -256,46 +256,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($ramal === '' || $nome === '') {
             $erro = 'Preencha o RAMAL e o NOME.';
         } else {
-            // verifica duplicidade de ramal (ignorando o proprio registro em edicao)
-            $duplicado = false;
-            foreach ($ramais as $r) {
-                if ($r['ramal'] === $ramal && $r['id'] !== $idEdicao) {
-                    $duplicado = true;
-                    break;
-                }
-            }
-
-            if ($duplicado) {
-                $erro = "O ramal $ramal já está cadastrado para outra pessoa.";
-            } else {
-                if ($idEdicao !== '') {
-                    // edicao
-                    foreach ($ramais as &$r) {
-                        if ($r['id'] === $idEdicao) {
-                            $r['ramal'] = $ramal;
-                            $r['nome'] = $nome;
-                            $r['setor'] = $setor;
-                            $r['cargo'] = $cargo;
-                            $r['email'] = $email;
-                        }
+            // o mesmo ramal pode pertencer a varias pessoas, entao nao ha checagem de duplicidade
+            if ($idEdicao !== '') {
+                // edicao
+                foreach ($ramais as &$r) {
+                    if ($r['id'] === $idEdicao) {
+                        $r['ramal'] = $ramal;
+                        $r['nome'] = $nome;
+                        $r['setor'] = $setor;
+                        $r['cargo'] = $cargo;
+                        $r['email'] = $email;
                     }
-                    unset($r);
-                    $sucesso = 'Ramal atualizado com sucesso.';
-                } else {
-                    // novo
-                    $ramais[] = [
-                        'id' => uniqid(),
-                        'ramal' => $ramal,
-                        'nome' => $nome,
-                        'setor' => $setor,
-                        'cargo' => $cargo,
-                        'email' => $email,
-                    ];
-                    $sucesso = 'Ramal cadastrado com sucesso.';
                 }
-                salvarRamais($dataFile, $ramais);
-                $ramais = carregarRamais($dataFile);
+                unset($r);
+                $sucesso = 'Ramal atualizado com sucesso.';
+            } else {
+                // novo
+                $ramais[] = [
+                    'id' => uniqid(),
+                    'ramal' => $ramal,
+                    'nome' => $nome,
+                    'setor' => $setor,
+                    'cargo' => $cargo,
+                    'email' => $email,
+                ];
+                $sucesso = 'Ramal cadastrado com sucesso.';
             }
+            salvarRamais($dataFile, $ramais);
+            $ramais = carregarRamais($dataFile);
         }
     }
 
